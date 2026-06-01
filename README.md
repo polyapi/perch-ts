@@ -8,13 +8,13 @@ The TypeScript client for [PolyAPI](https://polyapi.io). `perch-ts` uses a JavaS
 
 ```bash
 # npm
-npm install polyapi-perch
+npm install perch-ts
 
 # pnpm
-pnpm add polyapi-perch
+pnpm add perch-ts
 
 # yarn
-yarn add polyapi-perch
+yarn add perch-ts
 ```
 
 ---
