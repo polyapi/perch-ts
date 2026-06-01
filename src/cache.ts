@@ -22,7 +22,6 @@ export function createCache(ttl = process.env.SDK_CACHE_MS ? parseInt(process.en
         return record.value;
       }
 
-      cache.delete(key);
       return undefined;
     },
 
