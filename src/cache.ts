@@ -1,37 +1,29 @@
-import { polyCustom } from './polyCustom';
+const ALL_CACHES = new Map<string, Map<string, any>>();
 
-export function createCache(ttl = process.env.SDK_CACHE_MS ? parseInt(process.env.SDK_CACHE_MS) : 300_000) {
-  const cache = new Map<
-    string,
-    {
-      value: any;
-      expires: number;
-      executionId?: string;
+export function expireCache(names?: string[], paths?: string[]) {
+  names = names || Array.from(ALL_CACHES.keys());
+  for (const name of names) {
+    const cache = ALL_CACHES.get(name);
+    if (!cache) continue;
+    for (const key of cache.keys()) {
+      if (!paths || paths.includes(key)) {
+        cache.delete(key);
+      }
     }
-  >();
+  }
+}
+
+export function createCache(name: string) {
+  const cache = ALL_CACHES.get(name) || new Map<string, any>();
+  ALL_CACHES.set(name, cache);
 
   return {
     get(key: string) {
-      const record = cache.get(key);
-      if (!record) return undefined;
-
-      if (
-        record.expires >= Date.now() ||
-        record.executionId === polyCustom.executionId
-      ) {
-        return record.value;
-      }
-
-      return undefined;
+      return cache.get(key);
     },
 
     set(key: string, value: any) {
-      const executionId = polyCustom.executionId;
-      cache.set(key, {
-        value,
-        expires: Date.now() + ttl,
-        executionId,
-      });
+      cache.set(key, value);
     },
   };
 }

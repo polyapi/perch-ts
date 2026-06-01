@@ -1,8 +1,8 @@
-import { getVariable, updateVariable } from './api';
+import { getVariable, getVariableValue, updateVariable } from './api';
 import { createCache } from './cache';
 import { createProxy } from './proxy';
 
-const VARI_CACHE = createCache();
+const VARI_CACHE = createCache('vari');
 
 async function getVariableFromCacheOrGateway(path: string) {
   let variable = VARI_CACHE.get(path);
@@ -31,7 +31,7 @@ export const vari = createProxy(
             'Cannot access secret variable from client. Use .inject() instead within Poly function.',
           );
         } else {
-          return variable.value;
+          return getVariableValue(variable.id);
         }
       });
     }

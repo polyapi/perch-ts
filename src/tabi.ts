@@ -2,7 +2,7 @@ import { getTable, queryTable } from './api';
 import { createCache } from './cache';
 import { createProxy } from './proxy';
 
-const TABI_CACHE = createCache();
+const TABI_CACHE = createCache('tabi');
 
 async function getTableFromCacheOrGateway(path: string) {
   let table = TABI_CACHE.get(path);

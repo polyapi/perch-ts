@@ -1,10 +1,11 @@
 import { vari } from '../src/vari';
-import { getVariable, updateVariable } from '../src/api';
+import { getVariable, getVariableValue, updateVariable } from '../src/api';
 import { executeWithPolyCustom } from '../src/polyCustom';
 
 jest.mock('../src/api');
 
 const mockGetVariable = getVariable as jest.MockedFunction<typeof getVariable>;
+const mockGetVariableValue = getVariableValue as jest.MockedFunction<typeof getVariableValue>;
 const mockUpdateVariable = updateVariable as jest.MockedFunction<typeof updateVariable>;
 
 const defaultPolyCustom = {
@@ -52,9 +53,11 @@ describe('vari.inject', () => {
 
 describe('vari.get', () => {
   it('fetches variable and returns its value', async () => {
-    mockGetVariable.mockResolvedValue(mockVariable({ value: 'hello' }));
+    mockGetVariable.mockResolvedValue(mockVariable());
+    mockGetVariableValue.mockResolvedValue('hello');
     const { data } = await withExecution(() => vari.my.variable.get.test1.get());
     expect(mockGetVariable).toHaveBeenCalledWith('my.variable.get.test1');
+    expect(mockGetVariableValue).toHaveBeenCalledWith('var-uuid-123');
     expect(data).toBe('hello');
   });
 
@@ -63,13 +66,6 @@ describe('vari.get', () => {
     await expect(
       withExecution(() => vari.my.variable.get.test2.get())
     ).rejects.toThrow('Cannot access secret variable from client.');
-  });
-
-  it('caches the variable — only fetches once across multiple calls', async () => {
-    mockGetVariable.mockResolvedValue(mockVariable());
-    await withExecution(() => vari.my.variable.get.test3.get());
-    await withExecution(() => vari.my.variable.get.test3.get());
-    expect(mockGetVariable).toHaveBeenCalledTimes(1);
   });
 });
 

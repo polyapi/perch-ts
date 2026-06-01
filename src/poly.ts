@@ -2,7 +2,7 @@ import { getFunction, executeApiFunction, executeServerFunction } from './api';
 import { createCache } from './cache';
 import { createProxy } from './proxy';
 
-const FN_CACHE = createCache();
+const FN_CACHE = createCache('poly');
 
 async function getFunctionFromCacheOrGateway(path: string) {
   let fn = FN_CACHE.get(path);

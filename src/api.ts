@@ -1,5 +1,15 @@
 import { polyCustom } from './polyCustom';
 
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 100;
+
+function isConnectionError(err: unknown): boolean {
+  return (
+    err instanceof TypeError &&
+    (err.message.includes('ECONNRESET') ||
+      err.message.includes('ECONNREFUSED'))
+  );
+}
 
 function getHeaders(hasBody = false): Record<string, string> {
   return {
@@ -13,30 +23,51 @@ function getHeaders(hasBody = false): Record<string, string> {
 async function apiRequest(method: string, pathname: string, body?: unknown): Promise<unknown> {
   const baseUrl = process.env.POLY_API_BASE_URL;
   if (!baseUrl) throw new Error('POLY_API_BASE_URL is not set.');
+
   const url = `${baseUrl}${pathname}`;
   const payload = body !== undefined ? JSON.stringify(body) : undefined;
 
-  const res = await fetch(url, {
-    method,
-    headers: getHeaders(payload !== undefined),
-    body: payload,
-  });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: getHeaders(payload !== undefined),
+        body: payload,
+      });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Request Failed.\nStatus Code: ${res.status}\n${text}`);
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Request Failed.\nStatus Code: ${res.status}\n${text}`);
+      }
+
+      const contentType = res.headers.get('content-type') || '';
+
+      if (/^application\/json/.test(contentType)) {
+        return res.json();
+      }
+
+      if (/^text/.test(contentType)) {
+        return res.text();
+      }
+      throw new Error(`Invalid content-type.\nExpected json or text but received ${contentType}`);
+    } catch (err) {
+      if (isConnectionError(err)) {
+        lastError = err;
+        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
   }
 
-  const contentType = res.headers.get('content-type');
-  if (!contentType || !/^application\/json/.test(contentType)) {
-    throw new Error(`Invalid content-type.\nExpected application/json but received ${contentType}`);
-  }
-
-  return res.json();
+  throw lastError;
 }
 
 export const getVariable = (path: string) =>
   apiRequest('GET', `/variables/${path}?usePathId=true`);
+export const getVariableValue = (id: string) =>
+  apiRequest('GET', `/variables/${id}/value`);
 export const updateVariable = (id: string, value: any, expiresAt?: string | Date) =>
   apiRequest('PATCH', `/variables/${id}`, { value, expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt })
 

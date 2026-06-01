@@ -46,7 +46,7 @@ function mockWrongContentTypeResponse(body: unknown) {
   return {
     ok: true,
     status: 200,
-    headers: { get: () => 'text/html' },
+    headers: { get: () => 'application/xml' },
     json: jest.fn(),
     text: jest.fn().mockResolvedValue(String(body)),
   };
@@ -69,11 +69,27 @@ function expectCorrectHeaders(hasBody = false) {
     }),
   );
 }
-
+beforeAll(() => {
+  jest.useFakeTimers();
+});
+afterAll(() => {
+  jest.useRealTimers();
+});
 beforeEach(() => {
   process.env.POLY_API_BASE_URL = BASE_URL;
   process.env.POLY_API_VERSION = API_VERSION;
 });
+afterEach(() => {
+  mockFetch.mockReset();
+});
+
+async function flushRetries(times = 3) {
+  for (let i = 0; i < times; i++) {
+    await Promise.resolve();
+    jest.runAllTimers();
+    await Promise.resolve();
+  }
+}
 
 describe('apiRequest', () => {
   it('throws if POLY_API_BASE_URL is not set', async () => {
@@ -91,10 +107,10 @@ describe('apiRequest', () => {
   });
 
   it('throws on wrong content-type', async () => {
-    mockFetch.mockResolvedValue(mockWrongContentTypeResponse('<html>error</html>'));
+    mockFetch.mockResolvedValue(mockWrongContentTypeResponse('<error>error</error>'));
     await expect(
       withExecution(() => getVariable('foo.bar'))
-    ).rejects.toThrow('Invalid content-type.\nExpected application/json but received text/html');
+    ).rejects.toThrow('Invalid content-type.\nExpected json or text but received application/xml');
   });
 
   it('throws on null content-type', async () => {
@@ -114,6 +130,69 @@ describe('apiRequest', () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ value: 'x' }));
     await withExecution(() => getVariable('foo'));
     expectCorrectHeaders();
+  });
+});
+
+describe('apiRequest — ECONNRESET retry', () => {
+  
+  it('retries on ECONNRESET and resolves if a subsequent attempt succeeds', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new TypeError('fetch failed: ECONNRESET'))
+      .mockResolvedValueOnce(mockJsonResponse({ value: 'ok' }));
+
+    const promise = withExecution(() => getVariable('retry.test.1'));
+    await flushRetries();
+    const { data } = await promise;
+    expect(data).toEqual({ value: 'ok' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries up to MAX_RETRIES times then throws', async () => {
+    mockFetch.mockRejectedValue(new TypeError('fetch failed: ECONNRESET'));
+
+    const promise = withExecution(() => getVariable('retry.test.2'));
+    await flushRetries();
+    await expect(promise).rejects.toThrow('fetch failed: ECONNRESET');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it('does not retry on application errors', async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(500, 'Internal Server Error'));
+
+    const promise = withExecution(() => getVariable('retry.test.3'));
+    await flushRetries();
+    await expect(promise).rejects.toThrow('Request Failed.\nStatus Code: 500');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not retry on 4xx errors', async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(404, 'Not Found'));
+
+    const promise = withExecution(() => getVariable('retry.test.4'));
+    await flushRetries();
+    await expect(promise).rejects.toThrow('Request Failed.\nStatus Code: 404');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on ECONNREFUSED', async () => {
+    mockFetch
+      .mockRejectedValueOnce(new TypeError('fetch failed: ECONNREFUSED'))
+      .mockResolvedValueOnce(mockJsonResponse({ value: 'ok' }));
+
+    const promise = withExecution(() => getVariable('retry.test.6'));
+    await flushRetries();
+    const { data } = await promise;
+    expect(data).toEqual({ value: 'ok' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry on non-connection TypeErrors', async () => {
+    mockFetch.mockRejectedValue(new TypeError('something else entirely'));
+
+    const promise = withExecution(() => getVariable('retry.test.7'));
+    await flushRetries();
+    await expect(promise).rejects.toThrow('something else entirely');
+    expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 });
 
