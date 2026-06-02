@@ -11,6 +11,8 @@ const mockUpdateVariable = updateVariable as jest.MockedFunction<typeof updateVa
 const defaultPolyCustom = {
   executionId: 'test-exec',
   executionApiKey: 'test-key',
+  baseUrl: 'http://poly-api.internal',
+  polyApiVersion: '1',
 };
 
 function withExecution(fn: () => Promise<any>) {

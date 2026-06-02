@@ -14,17 +14,14 @@ function isConnectionError(err: unknown): boolean {
 function getHeaders(hasBody = false): Record<string, string> {
   return {
     Authorization: `Bearer ${polyCustom.executionApiKey}`,
-    'x-poly-api-version': process.env.POLY_API_VERSION ?? '',
+    'x-poly-api-version': polyCustom.polyApiVersion ?? '',
     'x-poly-execution-id': polyCustom.executionId,
     ...(hasBody && { 'Content-Type': 'application/json' }),
   };
 }
 
-async function apiRequest(method: string, pathname: string, body?: unknown): Promise<unknown> {
-  const baseUrl = process.env.POLY_API_BASE_URL;
-  if (!baseUrl) throw new Error('POLY_API_BASE_URL is not set.');
-
-  const url = `${baseUrl}${pathname}`;
+async function apiRequest(method: string, pathname: string, body?: unknown): Promise<any> {
+  const url = `${polyCustom.baseUrl}${pathname}`;
   const payload = body !== undefined ? JSON.stringify(body) : undefined;
 
   let lastError: unknown;
@@ -72,7 +69,7 @@ export const updateVariable = (id: string, value: any, expiresAt?: string | Date
   apiRequest('PATCH', `/variables/${id}`, { value, expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt })
 
 export const getFunction = (path: string) =>
-  apiRequest('GET', `/functions/${path}?usePathId=true&includeSourceCode=true`);
+  apiRequest('GET', `/functions/${path}?usePathId=true&serializer=perch`);
 export const executeServerFunction = (
   path: string,
   body: Record<string, unknown>,

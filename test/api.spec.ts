@@ -20,6 +20,8 @@ const EXECUTION_ID = 'test-execution-id';
 const defaultPolyCustom = {
   executionApiKey: EXECUTION_API_KEY,
   executionId: EXECUTION_ID,
+  baseUrl: BASE_URL,
+  polyApiVersion: API_VERSION,
 };
 
 function mockJsonResponse(body: unknown, status = 200) {
@@ -75,10 +77,6 @@ beforeAll(() => {
 afterAll(() => {
   jest.useRealTimers();
 });
-beforeEach(() => {
-  process.env.POLY_API_BASE_URL = BASE_URL;
-  process.env.POLY_API_VERSION = API_VERSION;
-});
 afterEach(() => {
   mockFetch.mockReset();
 });
@@ -92,13 +90,6 @@ async function flushRetries(times = 3) {
 }
 
 describe('apiRequest', () => {
-  it('throws if POLY_API_BASE_URL is not set', async () => {
-    delete process.env.POLY_API_BASE_URL;
-    await expect(
-      withExecution(() => getVariable('foo.bar'))
-    ).rejects.toThrow('POLY_API_BASE_URL is not set.');
-  });
-
   it('throws on non-ok response with status and body', async () => {
     mockFetch.mockResolvedValue(mockErrorResponse(500, 'Something went wrong'));
     await expect(
@@ -255,7 +246,7 @@ describe('getFunction', () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ sourceCode: 'export default ...' }));
     await withExecution(() => getFunction('my.function'));
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE_URL}/functions/my.function?usePathId=true&includeSourceCode=true`,
+      `${BASE_URL}/functions/my.function?usePathId=true&serializer=perch`,
       expect.objectContaining({ method: 'GET' }),
     );
   });

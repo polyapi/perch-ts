@@ -1,4 +1,4 @@
-export { poly } from './poly';
+export { poly, executeTopLevelServerFunction } from './poly';
 export { vari } from './vari';
 export { tabi } from './tabi';
 export { expireCache } from './cache';

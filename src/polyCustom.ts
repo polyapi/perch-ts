@@ -78,14 +78,18 @@ type AuthData = {
 };
 
 type PolyCustom = {
-  readonly executionId?: string;
-  readonly logsEnabled: boolean;
+  readonly executionId: string;
   readonly functionId: string;
   readonly functionEnvironmentId: string;
   readonly functionTenantId: string;
   readonly executionApiKey: string | undefined | null;
   readonly userSessionId: string | undefined;
   readonly authData: Partial<AuthData>;
+  readonly logsEnabled: boolean;
+  readonly logRetentionGroup?: string;
+  readonly baseUrl: string;
+  readonly polyApiVersion: string;
+  // Fields the user can use to customize their response
   responseStatusCode: number;
   responseContentType: string;
   responseHeaders: Record<string, string | string[]>;
@@ -106,13 +110,25 @@ export async function executeWithPolyCustom(
   fn: () => Promise<unknown>,
   init: Partial<PolyCustom>,
 ) {
-  return await asyncLocalStorage.run(init, () =>
-    Promise.resolve(fn()).then((data) => {
+  return await asyncLocalStorage.run(init, () => {
+    try {
+      return Promise.resolve(fn())
+        .then((data) => {
+          const state = asyncLocalStorage.getStore() as PolyCustom;
+          return {
+            data,
+            error: undefined,
+            polyCustom: state,
+          };
+        });
+    } catch (error) {
       const state = asyncLocalStorage.getStore() as PolyCustom;
       return {
-        data,
+        data: undefined,
+        error,
         polyCustom: state,
       };
-    }),
+    }
+  },
   );
 }

@@ -12,6 +12,8 @@ const mockTable = { id: 'table-uuid-123', name: 'my table' };
 const defaultPolyCustom = {
   executionId: 'test-exec',
   executionApiKey: 'test-key',
+  baseUrl: 'http://poly-api.internal',
+  polyApiVersion: '1',
 };
 
 function withExecution<T>(fn: () => Promise<T>) {
@@ -62,10 +64,9 @@ describe('tabi.selectMany', () => {
     expect(query.limit).toBe(1000);
   });
 
-  it('throws if limit exceeds 1000', async () => {
-    await expect(
-      withExecution(() => tabi.my.table.selectMany({ limit: 1001 }))
-    ).rejects.toThrow('Cannot select more than 1000 rows at a time.');
+  it('errors if limit exceeds 1000', async () => {
+    const { error } = await withExecution(() => tabi.my.table.selectMany({ limit: 1001 }));
+    expect(error?.message).toBe('Cannot select more than 1000 rows at a time.');
   });
 });
 
@@ -135,11 +136,10 @@ describe('tabi.insertMany', () => {
     expect(mockQueryTable).toHaveBeenCalledWith('insert', 'my.table', query);
   });
 
-  it('throws if data exceeds 1000 rows', async () => {
+  it('errors if data exceeds 1000 rows', async () => {
     const query = { data: Array(1001).fill({ name: 'x' }) };
-    await expect(
-      withExecution(() => tabi.my.table.insertMany(query))
-    ).rejects.toThrow('Cannot insert more than 1000 rows at a time.');
+    const { error } = await withExecution(() => tabi.my.table.insertMany(query));
+    expect(error?.message).toBe('Cannot insert more than 1000 rows at a time.');
   });
 });
 
@@ -163,11 +163,10 @@ describe('tabi.upsertMany', () => {
     expect(mockQueryTable).toHaveBeenCalledWith('upsert', 'my.table', query);
   });
 
-  it('throws if data exceeds 1000 rows', async () => {
+  it('errors if data exceeds 1000 rows', async () => {
     const query = { data: Array(1001).fill({ name: 'x' }) };
-    await expect(
-      withExecution(() => tabi.my.table.upsertMany(query))
-    ).rejects.toThrow('Cannot upsert more than 1000 rows at a time.');
+    const { error } = await withExecution(() => tabi.my.table.upsertMany(query));
+    expect(error?.message).toBe('Cannot upsert more than 1000 rows at a time.');
   });
 });
 
@@ -188,13 +187,6 @@ describe('tabi.updateMany', () => {
     const query = { data: [{ id: 1, name: 'Bob' }] };
     await withExecution(() => tabi.my.table.updateMany(query));
     expect(mockQueryTable).toHaveBeenCalledWith('update', 'my.table', query);
-  });
-
-  it('throws if data exceeds 1000 rows', async () => {
-    const query = { data: Array(1001).fill({ name: 'x' }) };
-    await expect(
-      withExecution(() => tabi.my.table.updateMany(query))
-    ).rejects.toThrow('Cannot upsert more than 1000 rows at a time.');
   });
 });
 

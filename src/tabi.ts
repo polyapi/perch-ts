@@ -107,8 +107,6 @@ export const tabi = createProxy('poly', functions, (path, fn, ...args) => {
   }
   if (fn === 'updateMany') {
     const query = args[0];
-    if (query.data.length > 1000)
-      throw Error(`Cannot upsert more than 1000 rows at a time.`);
     return queryTable('update', path, query);
   }
   if (fn === 'updateOne') {

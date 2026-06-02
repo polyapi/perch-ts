@@ -11,6 +11,8 @@ const mockExecuteServerFunction = executeServerFunction as jest.MockedFunction<t
 const defaultPolyCustom = {
   executionId: 'test-exec',
   executionApiKey: 'test-key',
+  baseUrl: 'http://poly-api.internal',
+  polyApiVersion: '1',
 };
 
 function withExecution<T>(fn: () => Promise<T>) {

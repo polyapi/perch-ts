@@ -1,5 +1,6 @@
 import { getFunction, executeApiFunction, executeServerFunction } from './api';
 import { createCache } from './cache';
+import { polyCustom } from './polyCustom';
 import { createProxy } from './proxy';
 
 const FN_CACHE = createCache('poly');
@@ -13,9 +14,13 @@ async function getFunctionFromCacheOrGateway(path: string) {
   return fn;
 }
 
-function executeClientFunction(fn, args) {
+function executeLocalFunction(fn: any, args: any[]) {
+  let cfx = fn.execute;
+  if (!cfx) {
+    cfx = new Function(`${fn.code}\nreturn ${fn.name}`)();
+    fn.execute = cfx;
+  }
   // eslint-disable-next-line no-new-func
-  const cfx = new Function(`${fn.code}\nreturn ${fn.name}`)();
   return cfx(...args);
 }
 
@@ -24,7 +29,12 @@ async function executeFunction(path: string, fn: any, args: any[]) {
     const body = Object.fromEntries(
       fn.arguments.map((a, i) => [a.key, args[i]]),
     );
-    return executeApiFunction(path, body);
+    return executeApiFunction(path, body).then((data: { status: number; data: unknown; }) => {
+      if (data && (data.status < 200 || data.status >= 300) && polyCustom.logsEnabled) {
+        console.error('Error executing api function with id:', fn.id, 'Status code:', data.status, 'Request data:', JSON.stringify(scrub(body)), 'Response data:', JSON.stringify(data.data));
+      }
+      return data;
+    });
   }
   if (fn.type === 'serverFunction') {
     const body = Object.fromEntries(
@@ -33,9 +43,18 @@ async function executeFunction(path: string, fn: any, args: any[]) {
     return executeServerFunction(path, body);
   }
   if (fn.type === 'clientFunction') {
-    return executeClientFunction(fn, args);
+    return executeLocalFunction(fn, args);
   }
   throw new Error(`Unknown function type for '${path}'`);
+}
+
+export async function executeTopLevelServerFunction(id: string, args: any[]) {
+  let fn = FN_CACHE.get(id);
+  if (fn === undefined) {
+    fn = await getFunction(id);
+    FN_CACHE.set(id, fn);
+  }
+  return executeLocalFunction(fn, args);
 }
 
 export const poly = createProxy('poly', [], (path, _fn, ...args) => {
@@ -44,3 +63,24 @@ export const poly = createProxy('poly', [], (path, _fn, ...args) => {
     executeFunction(path, f, args),
   );
 });
+
+const scrub = (data) => {
+  if (!data || typeof data !== 'object') return data;
+  const secrets = ["x_api_key", "x-api-key", "access_token", "access-token", "authorization", "api_key", "api-key", "apikey", "accesstoken", "token", "password", "key"];
+  if (Array.isArray(data)) {
+    return data.map(item => scrub(item))
+  }
+  else {
+    const temp = {};
+    for (const key of Object.keys(data)) {
+      if (typeof data[key] === 'object') {
+        temp[key] = scrub(data[key]);
+      } else if (secrets.includes(key.toLowerCase())) {
+        temp[key] = "********";
+      } else {
+        temp[key] = data[key];
+      }
+    }
+    return temp
+  }
+}
