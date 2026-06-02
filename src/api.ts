@@ -6,8 +6,7 @@ const RETRY_DELAY_MS = 100;
 function isConnectionError(err: unknown): boolean {
   return (
     err instanceof TypeError &&
-    (err.message.includes('ECONNRESET') ||
-      err.message.includes('ECONNREFUSED'))
+    ['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED'].some(msg => err.message.includes(msg))
   );
 }
 
@@ -26,6 +25,10 @@ async function apiRequest(method: string, pathname: string, body?: unknown): Pro
 
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      // Exponential backoff
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+    }
     try {
       const res = await fetch(url, {
         method,
@@ -51,7 +54,6 @@ async function apiRequest(method: string, pathname: string, body?: unknown): Pro
     } catch (err) {
       if (isConnectionError(err)) {
         lastError = err;
-        await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
         continue;
       }
       throw err;

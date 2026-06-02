@@ -66,6 +66,7 @@ describe('tabi.selectMany', () => {
 
   it('errors if limit exceeds 1000', async () => {
     const { error } = await withExecution(() => tabi.my.table.selectMany({ limit: 1001 }));
+    // @ts-expect-error - it's fine
     expect(error?.message).toBe('Cannot select more than 1000 rows at a time.');
   });
 });
@@ -139,6 +140,7 @@ describe('tabi.insertMany', () => {
   it('errors if data exceeds 1000 rows', async () => {
     const query = { data: Array(1001).fill({ name: 'x' }) };
     const { error } = await withExecution(() => tabi.my.table.insertMany(query));
+    // @ts-expect-error - it's fine
     expect(error?.message).toBe('Cannot insert more than 1000 rows at a time.');
   });
 });
@@ -166,6 +168,7 @@ describe('tabi.upsertMany', () => {
   it('errors if data exceeds 1000 rows', async () => {
     const query = { data: Array(1001).fill({ name: 'x' }) };
     const { error } = await withExecution(() => tabi.my.table.upsertMany(query));
+    // @ts-expect-error - it's fine
     expect(error?.message).toBe('Cannot upsert more than 1000 rows at a time.');
   });
 });
