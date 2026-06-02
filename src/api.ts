@@ -6,7 +6,9 @@ const RETRY_DELAY_MS = 100;
 function isConnectionError(err: unknown): boolean {
   return (
     err instanceof TypeError &&
-    ['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED'].some(msg => err.message.includes(msg))
+    ['ECONNRESET', 'ECONNABORTED', 'ETIMEDOUT', 'EPIPE', 'ECONNREFUSED'].some(
+      (msg) => err.message.includes(msg),
+    )
   );
 }
 
@@ -19,7 +21,11 @@ function getHeaders(hasBody = false): Record<string, string> {
   };
 }
 
-async function apiRequest(method: string, pathname: string, body?: unknown): Promise<any> {
+async function apiRequest(
+  method: string,
+  pathname: string,
+  body?: unknown,
+): Promise<any> {
   const url = `${polyCustom.baseUrl}${pathname}`;
   const payload = body !== undefined ? JSON.stringify(body) : undefined;
 
@@ -27,9 +33,10 @@ async function apiRequest(method: string, pathname: string, body?: unknown): Pro
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       // Exponential backoff
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * attempt));
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * attempt));
     }
     try {
+      // eslint-disable-next-line no-undef
       const res = await fetch(url, {
         method,
         headers: getHeaders(payload !== undefined),
@@ -50,7 +57,9 @@ async function apiRequest(method: string, pathname: string, body?: unknown): Pro
       if (/^text/.test(contentType)) {
         return res.text();
       }
-      throw new Error(`Invalid content-type.\nExpected json or text but received ${contentType}`);
+      throw new Error(
+        `Invalid content-type.\nExpected json or text but received ${contentType}`,
+      );
     } catch (err) {
       if (isConnectionError(err)) {
         lastError = err;
@@ -67,15 +76,23 @@ export const getVariable = (path: string) =>
   apiRequest('GET', `/variables/${path}?usePathId=true`);
 export const getVariableValue = (id: string) =>
   apiRequest('GET', `/variables/${id}/value`);
-export const updateVariable = (id: string, value: any, expiresAt?: string | Date) =>
-  apiRequest('PATCH', `/variables/${id}`, { value, expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt })
+export const updateVariable = (
+  id: string,
+  value: any,
+  expiresAt?: string | Date,
+) =>
+  apiRequest('PATCH', `/variables/${id}`, {
+    value,
+    expiresAt: expiresAt instanceof Date ? expiresAt.toISOString() : expiresAt,
+  });
 
 export const getFunction = (path: string) =>
   apiRequest('GET', `/functions/${path}?usePathId=true&serializer=perch`);
 export const executeServerFunction = (
   path: string,
   body: Record<string, unknown>,
-) => apiRequest('POST', `/functions/server/${path}/execute?usePathId=true`, body);
+) =>
+  apiRequest('POST', `/functions/server/${path}/execute?usePathId=true`, body);
 export const executeApiFunction = (
   path: string,
   body: Record<string, unknown>,

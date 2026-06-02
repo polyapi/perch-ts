@@ -1,4 +1,3 @@
-
 export function createProxy(
   name: string,
   functions: string[],

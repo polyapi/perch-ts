@@ -42,8 +42,9 @@ export const vari = createProxy(
     }
     if (fn === 'update') {
       const [value, expiresAt] = args;
-      return getVariableFromCacheOrGateway(path)
-        .then((variable) => updateVariable(variable.id, value, expiresAt));
+      return getVariableFromCacheOrGateway(path).then((variable) =>
+        updateVariable(variable.id, value, expiresAt),
+      );
     }
     return null;
   },

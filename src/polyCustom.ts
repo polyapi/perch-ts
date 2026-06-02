@@ -112,15 +112,14 @@ export async function executeWithPolyCustom(
 ) {
   return await asyncLocalStorage.run(init, () => {
     try {
-      return Promise.resolve(fn())
-        .then((data) => {
-          const state = asyncLocalStorage.getStore() as PolyCustom;
-          return {
-            data,
-            error: undefined,
-            polyCustom: state,
-          };
-        });
+      return Promise.resolve(fn()).then((data) => {
+        const state = asyncLocalStorage.getStore() as PolyCustom;
+        return {
+          data,
+          error: undefined,
+          polyCustom: state,
+        };
+      });
     } catch (error) {
       const state = asyncLocalStorage.getStore() as PolyCustom;
       return {
@@ -129,6 +128,5 @@ export async function executeWithPolyCustom(
         polyCustom: state,
       };
     }
-  },
-  );
+  });
 }

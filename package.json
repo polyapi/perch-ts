@@ -8,17 +8,14 @@
     "url": "https://github.com/polyapi/perch-ts"
   },
   "files": [
-    "build/**/*",
-    "index.js",
-    "index.d.ts"
+    "build/**/*"
   ],
-  "main": "index.js",
+  "main": "build/index.js",
   "bin": {
     "poly": "build/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-    "prebuild": "rimraf build",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.ts\" --fix",
     "prepare": "husky install",
@@ -40,6 +37,7 @@
     "jest-summary-reporter": "0.0.2",
     "prettier": "3.0.0",
     "ts-jest": "29.0.3",
+    "tsc-alias": "1.8.6",
     "typescript": "5.1.6"
   },
   "engines": {

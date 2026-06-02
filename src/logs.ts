@@ -1,9 +1,9 @@
-import { polyCustom } from "./polyCustom";
+import { polyCustom } from './polyCustom';
 
 const patchConsoleMethodWithLoggerData = (method, logLevel) => {
-  const metaData = polyCustom.logRetentionGroup ?
-    `[${logLevel}][META]executionId="${polyCustom.executionId}",logRetentionGroup="${polyCustom.logRetentionGroup}"[/META]` :
-    `[${logLevel}][META]executionId="${polyCustom.executionId}"[/META]`;
+  const metaData = polyCustom.logRetentionGroup
+    ? `[${logLevel}][META]executionId="${polyCustom.executionId}",logRetentionGroup="${polyCustom.logRetentionGroup}"[/META]`
+    : `[${logLevel}][META]executionId="${polyCustom.executionId}"[/META]`;
 
   const originalMethod = console[method];
   console[method] = function () {
@@ -21,7 +21,6 @@ patchConsoleMethodWithLoggerData('info', 'INFO');
 patchConsoleMethodWithLoggerData('error', 'ERROR');
 patchConsoleMethodWithLoggerData('warn', 'WARN');
 
-
 const MAX_CHARS = 12_000;
 
 function processOutput(chunk) {
@@ -31,25 +30,29 @@ function processOutput(chunk) {
   str = str.trim();
   if (str.startsWith('{') && str.endsWith('}')) {
     try {
-      let obj = JSON.parse(str);
+      const obj = JSON.parse(str);
       const execId = polyCustom.executionId;
 
       obj.executionId = polyCustom.executionId;
       str = JSON.stringify(obj);
-    } catch (e) { }
+    } catch (e) {}
   }
   // Truncate output and add note for end users
   if (str.length > MAX_CHARS) {
     const len = str.length - MAX_CHARS;
-    str = str.substring(0, MAX_CHARS) + `[LOG TRUNCATED TO ${MAX_CHARS} CHARACTERS. ${len} CHARACTERS NOT SHOWN.]`;
+    str =
+      str.substring(0, MAX_CHARS) +
+      `[LOG TRUNCATED TO ${MAX_CHARS} CHARACTERS. ${len} CHARACTERS NOT SHOWN.]`;
   }
   return `${leadingWhitespace}${str}${trailingWhitespace}`;
 }
 
 const originalStdoutWrite = process.stdout.write.bind(process.stdout);
 // @ts-expect-error - it's fine
-process.stdout.write = (chunk, encoding, callback) => originalStdoutWrite(processOutput(chunk), encoding, callback);
+process.stdout.write = (chunk, encoding, callback) =>
+  originalStdoutWrite(processOutput(chunk), encoding, callback);
 
 const originalStderrWrite = process.stderr.write.bind(process.stderr);
 // @ts-expect-error - it's fine
-process.stderr.write = (chunk, encoding, callback) => originalStderrWrite(processOutput(chunk), encoding, callback);
+process.stderr.write = (chunk, encoding, callback) =>
+  originalStderrWrite(processOutput(chunk), encoding, callback);
