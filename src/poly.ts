@@ -1,4 +1,4 @@
-import { getFunction, executeApiFunction, executeServerFunction } from './api';
+import { getFunction, getFunctionById, executeApiFunction, executeServerFunction } from './api';
 import { createCache } from './cache';
 import { polyCustom } from './polyCustom';
 import { createProxy } from './proxy';
@@ -14,12 +14,15 @@ async function getFunctionFromCacheOrGateway(path: string) {
   return fn;
 }
 
+// Use symbols to cache the compiled function so that we don't ever clobber any values that might have been serialized on the function
+const executeSymbol = Symbol('execute');
+
 function executeLocalFunction(fn: any, args: any[]) {
-  let cfx = fn.execute;
+  let cfx = fn[executeSymbol];
   if (!cfx) {
     // eslint-disable-next-line no-new-func
     cfx = new Function(`${fn.code}\nreturn ${fn.name}`)();
-    fn.execute = cfx;
+    fn[executeSymbol] = cfx;
   }
 
   return cfx(...args);
@@ -67,7 +70,7 @@ async function executeFunction(path: string, fn: any, args: any[]) {
 export async function executeTopLevelServerFunction(id: string, args: any[]) {
   let fn = FN_CACHE.get(id);
   if (fn === undefined) {
-    fn = await getFunction(id);
+    fn = await getFunctionById(id);
     FN_CACHE.set(id, fn);
   }
   return executeLocalFunction(fn, args);

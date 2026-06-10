@@ -88,6 +88,8 @@ export const updateVariable = (
 
 export const getFunction = (path: string) =>
   apiRequest('GET', `/functions/any/${path}?usePathId=true&serializer=perch`);
+export const getFunctionById = (id: string) =>
+  apiRequest('GET', `/functions/any/${id}?serializer=perch`);
 export const executeServerFunction = (
   path: string,
   body: Record<string, unknown>,

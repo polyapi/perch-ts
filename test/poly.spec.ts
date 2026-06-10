@@ -1,4 +1,4 @@
-import { poly } from '../src/poly';
+import { poly, executeTopLevelServerFunction } from '../src/poly';
 import { getFunction, executeApiFunction, executeServerFunction } from '../src/api';
 import { executeWithPolyCustom } from '../src/polyCustom';
 
@@ -46,6 +46,23 @@ describe('poly.id', () => {
     await withExecution(() => poly.my.function.id.test2.id());
     await withExecution(() => poly.my.function.id.test2.id());
     expect(mockGetFunction).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('poly - top level server function', () => {
+  it('works', async () => {
+    mockGetFunction.mockResolvedValue(mockFn({
+      type: 'serverFunction',
+      name: 'add',
+      code: 'async function add(a, b, c) { return Promise.resolve((a + b) * c); }',
+      arguments: [{ key: 'a' }, { key: 'b' }, { key: 'c' }],
+    }));
+
+    
+    const { data } = await withExecution(
+      () => executeTopLevelServerFunction('fn-uuid-123', [2, 3, 4])
+    );
+    expect(data).toBe(20);
   });
 });
 

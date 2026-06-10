@@ -2,6 +2,7 @@ import {
   getVariable,
   updateVariable,
   getFunction,
+  getFunctionById,
   executeServerFunction,
   executeApiFunction,
   getTable,
@@ -246,7 +247,18 @@ describe('getFunction', () => {
     mockFetch.mockResolvedValue(mockJsonResponse({ sourceCode: 'export default ...' }));
     await withExecution(() => getFunction('my.function'));
     expect(mockFetch).toHaveBeenCalledWith(
-      `${BASE_URL}/functions/my.function?usePathId=true&serializer=perch`,
+      `${BASE_URL}/functions/any/my.function?usePathId=true&serializer=perch`,
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+});
+
+describe('getFunctionById', () => {
+  it('works as exepcted', async () => {
+    mockFetch.mockResolvedValue(mockJsonResponse({ sourceCode: 'export default ...' }));
+    await withExecution(() => getFunctionById('uuid'));
+    expect(mockFetch).toHaveBeenCalledWith(
+      `${BASE_URL}/functions/any/uuid?serializer=perch`,
       expect.objectContaining({ method: 'GET' }),
     );
   });
