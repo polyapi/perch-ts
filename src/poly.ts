@@ -1,7 +1,13 @@
+import { createRequire } from 'node:module';
+import vm from 'node:vm';
 import { getFunction, getFunctionById, executeApiFunction, executeServerFunction } from './api';
 import { createCache } from './cache';
 import { polyCustom } from './polyCustom';
 import { createProxy } from './proxy';
+import { vari } from './vari';
+import { tabi } from './tabi';
+
+const moduleRequire = createRequire(__filename);
 
 const FN_CACHE = createCache('poly');
 
@@ -20,8 +26,23 @@ const executeSymbol = Symbol('execute');
 function executeLocalFunction(fn: any, args: any[]) {
   let cfx = fn[executeSymbol];
   if (!cfx) {
-    // eslint-disable-next-line no-new-func
-    cfx = new Function(`${fn.code}\nreturn ${fn.name}`)();
+    const module = { exports: {} as any };
+    const exports = module.exports;
+
+    // Inject known dependencies directly rather than relying on require resolution
+    const injectedRequire = (id: string) => {
+      if (id === 'polyapi') return { polyCustom, poly, vari, tabi };
+      return moduleRequire(id);
+    };
+
+    const wrapper = `(function(require, module, exports) { ${fn.code}\nreturn ${fn.name}; })`;
+    const compiled = vm.runInThisContext(wrapper);
+    cfx = compiled(injectedRequire, module, exports);
+
+    cfx = cfx ?? module.exports[fn.name] ?? module.exports.default;
+    if (typeof cfx !== 'function') {
+      throw new Error(`Could not find exported function '${fn.name}' in function code.`);
+    }
     fn[executeSymbol] = cfx;
   }
 

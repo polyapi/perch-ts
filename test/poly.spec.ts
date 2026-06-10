@@ -1,10 +1,11 @@
 import { poly, executeTopLevelServerFunction } from '../src/poly';
-import { getFunction, executeApiFunction, executeServerFunction } from '../src/api';
+import { getFunction, getFunctionById, executeApiFunction, executeServerFunction } from '../src/api';
 import { executeWithPolyCustom } from '../src/polyCustom';
 
 jest.mock('../src/api');
 
 const mockGetFunction = getFunction as jest.MockedFunction<typeof getFunction>;
+const mockGetFunctionById = getFunctionById as jest.MockedFunction<typeof getFunctionById>;
 const mockExecuteApiFunction = executeApiFunction as jest.MockedFunction<typeof executeApiFunction>;
 const mockExecuteServerFunction = executeServerFunction as jest.MockedFunction<typeof executeServerFunction>;
 
@@ -51,7 +52,7 @@ describe('poly.id', () => {
 
 describe('poly - top level server function', () => {
   it('works', async () => {
-    mockGetFunction.mockResolvedValue(mockFn({
+    mockGetFunctionById.mockResolvedValue(mockFn({
       type: 'serverFunction',
       name: 'add',
       code: 'async function add(a, b, c) { return Promise.resolve((a + b) * c); }',
@@ -132,6 +133,26 @@ describe('poly — clientFunction', () => {
     );
     expect(data).toBe(20);
   });
+
+  it('can execute nodejs functions with their own imports', async () => {
+    mockGetFunction.mockResolvedValue(mockFn({
+        "type": "clientFunction",
+        "id": "47ca1af2-1d7b-402a-b1bf-4d27b81216b1",
+        "name": "totallyNew",
+        "language": "javascript",
+        "code": "Object.defineProperty(exports, \"__esModule\", { value: true });\nconst polyapi_1 = require(\"polyapi\");\n// npx poly function add --context test --server --logs=enabled totallyNew ./src/serverFunctions/totallyNew.ts\nasync function totallyNew(arg) {\n    console.log(JSON.stringify(arg));\n    if (arg.message === 'slow') {\n        polyapi_1.polyCustom.responseStatusCode = 400;\n        await new Promise(r => setTimeout(r, 2000));\n    }\n    else {\n        polyapi_1.polyCustom.responseStatusCode = 200;\n    }\n    return arg?.message || 'Missing message??!?!';\n}\n",
+        "arguments": [
+            {
+                "key": "arg"
+            }
+        ]
+    }));
+
+    const { data } = await withExecution(() =>
+      poly.my.function.client.totallyNew({ message: "slow" })
+    );
+    expect(data).toBe("slow");
+  })
 
   it('does not call executeServerFunction or executeApiFunction', async () => {
     mockGetFunction.mockResolvedValue(mockFn({
