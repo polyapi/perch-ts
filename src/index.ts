@@ -3,3 +3,4 @@ export { vari } from './vari';
 export { tabi } from './tabi';
 export { expireCache } from './cache';
 export { polyCustom, executeWithPolyCustom } from './polyCustom';
+import "./logs";

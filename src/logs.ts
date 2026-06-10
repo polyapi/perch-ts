@@ -2,7 +2,7 @@ import { polyCustom } from './polyCustom';
 
 const patchConsoleMethodWithLoggerData = (method, logLevel) => {
   const originalMethod = console[method];
-  console[method] = function () {
+  console[method] = function (...args) {
     if (!polyCustom.logsEnabled) {
       return;
     }
@@ -11,7 +11,6 @@ const patchConsoleMethodWithLoggerData = (method, logLevel) => {
       ? `[${logLevel}][META]executionId="${polyCustom.executionId}",logRetentionGroup="${polyCustom.logRetentionGroup}"[/META]`
       : `[${logLevel}][META]executionId="${polyCustom.executionId}"[/META]`;
 
-    const args = Array.prototype.slice.call(arguments);
     originalMethod.apply(console, [metaData, ...args, `[/${logLevel}]`]);
   };
 };
@@ -31,6 +30,9 @@ function processOutput(chunk) {
   if (str.startsWith('{') && str.endsWith('}')) {
     try {
       const obj = JSON.parse(str);
+      // Hack to squash the default fastify request logging which we can't turn off without using a custom nodejs buildpack
+      // Using 'level', 'pid', and 'node_version' keys to ensure we filter out other arbitrary object logs
+      if (obj['level'] && obj['pid'] && obj['node_version'] && !obj['executionId']) return;
       obj.executionId = polyCustom.executionId;
       str = JSON.stringify(obj);
     } catch (e) {}
