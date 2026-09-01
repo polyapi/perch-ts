@@ -1,7 +1,23 @@
 import { polyCustom } from './polyCustom';
 
 const MAX_RETRIES = 3;
+const MAX_THROTTLE_RETRIES = 5;
 const RETRY_DELAY_MS = 100;
+const DEFAULT_RETRY_AFTER_MS = 1000;
+const MAX_RETRY_AFTER_MS = 60_000;
+
+const parseRetryAfterMs = (value: string | null): number => {
+  if (value == null || value === '') return DEFAULT_RETRY_AFTER_MS;
+  const asSeconds = Number(value);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+    return Math.min(asSeconds * 1000, MAX_RETRY_AFTER_MS);
+  }
+  const asDate = Date.parse(value);
+  if (!Number.isNaN(asDate)) {
+    return Math.min(Math.max(asDate - Date.now(), 0), MAX_RETRY_AFTER_MS);
+  }
+  return DEFAULT_RETRY_AFTER_MS;
+};
 
 function isConnectionError(err: unknown): boolean {
   return (
@@ -30,6 +46,7 @@ async function apiRequest(
   const payload = body !== undefined ? JSON.stringify(body) : undefined;
 
   let lastError: unknown;
+  let throttleRetries = 0;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       // Exponential backoff
@@ -42,6 +59,15 @@ async function apiRequest(
         headers: getHeaders(payload !== undefined),
         body: payload,
       });
+
+      if (res.status === 429 && throttleRetries < MAX_THROTTLE_RETRIES) {
+        throttleRetries += 1;
+        await new Promise((r) =>
+          setTimeout(r, parseRetryAfterMs(res.headers.get('retry-after'))),
+        );
+        attempt -= 1;
+        continue;
+      }
 
       if (!res.ok) {
         const text = await res.text();

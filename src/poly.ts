@@ -1,6 +1,11 @@
 import { createRequire } from 'node:module';
 import vm from 'node:vm';
-import { getFunction, getFunctionById, executeApiFunction, executeServerFunction } from './api';
+import {
+  getFunction,
+  getFunctionById,
+  executeApiFunction,
+  executeServerFunction,
+} from './api';
 import { createCache } from './cache';
 import { polyCustom } from './polyCustom';
 import { createProxy } from './proxy';
@@ -41,7 +46,9 @@ function executeLocalFunction(fn: any, args: any[]) {
 
     cfx = cfx ?? module.exports[fn.name] ?? module.exports.default;
     if (typeof cfx !== 'function') {
-      throw new Error(`Could not find exported function '${fn.name}' in function code.`);
+      throw new Error(
+        `Could not find exported function '${fn.name}' in function code.`,
+      );
     }
     fn[executeSymbol] = cfx;
   }

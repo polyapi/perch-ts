@@ -1,6 +1,6 @@
 {
   "name": "perch-ts",
-  "version": "0.0.6",
+  "version": "0.0.9",
   "description": "PolyAPI TS lean, proxy-based runtime SDK.",
   "license": "MIT",
   "repository": {
@@ -39,6 +39,18 @@
     "ts-jest": "29.0.3",
     "tsc-alias": "1.8.6",
     "typescript": "5.1.6"
+  },
+  "overrides": {
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "3.15.1"
+    },
+    "brace-expansion": "5.0.9",
+    "json-schema-to-typescript": {
+      "js-yaml": "4.3.1"
+    },
+    "@eslint/eslintrc": {
+      "js-yaml": "4.3.1"
+    }
   },
   "engines": {
     "node": ">=18.20.5"

@@ -35,11 +35,18 @@ function mockJsonResponse(body: unknown, status = 200) {
   };
 }
 
-function mockErrorResponse(status: number, body = 'Internal Server Error') {
+function mockErrorResponse(status: number, body = 'Internal Server Error', headers: Record<string, string> = {}) {
   return {
     ok: false,
     status,
-    headers: { get: () => 'text/plain' },
+    headers: {
+      get: (h: string) => {
+        const name = h.toLowerCase();
+        if (name === 'retry-after') return headers['retry-after'] ?? headers['Retry-After'] ?? null;
+        if (name === 'content-type') return 'text/plain';
+        return headers[name] ?? null;
+      },
+    },
     json: jest.fn(),
     text: jest.fn().mockResolvedValue(body),
   };
@@ -164,6 +171,37 @@ describe('apiRequest — ECONNRESET retry', () => {
     await flushRetries();
     await expect(promise).rejects.toThrow('Request Failed.\nStatus Code: 404');
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits Retry-After seconds and retries on 429', async () => {
+    mockFetch
+      .mockResolvedValueOnce(mockErrorResponse(429, 'Too Many Requests', { 'retry-after': '1' }))
+      .mockResolvedValueOnce(mockJsonResponse({ value: 'ok' }));
+
+    const promise = withExecution(() => getVariable('retry.throttle.1'));
+    await Promise.resolve();
+    jest.advanceTimersByTime(1000);
+    await Promise.resolve();
+    const { data } = await promise;
+    expect(data).toEqual({ value: 'ok' });
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('gives up after too many 429s', async () => {
+    mockFetch.mockResolvedValue(mockErrorResponse(429, 'Too Many Requests', { 'retry-after': '1' }));
+
+    const promise = withExecution(() => getVariable('retry.throttle.2'));
+    const drain = async () => {
+      for (let i = 0; i < 8; i++) {
+        await Promise.resolve();
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+      }
+    };
+    const waiting = drain();
+    await expect(promise).rejects.toThrow('Request Failed.\nStatus Code: 429');
+    await waiting;
+    expect(mockFetch).toHaveBeenCalledTimes(6);
   });
 
   it('retries on ECONNREFUSED', async () => {
