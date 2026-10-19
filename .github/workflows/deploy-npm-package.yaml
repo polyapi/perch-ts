@@ -3,6 +3,12 @@ on:
   push:
     branches:
       - develop
+  workflow_dispatch:
+    inputs:
+      perch_version:
+        description: perch-ts package version (defaults to the checked-out package.json)
+        required: false
+        type: string
 
 jobs:
   develop:
@@ -13,13 +19,13 @@ jobs:
       contents: read
       packages: write
 
-    if: ${{ github.ref == 'refs/heads/develop' }}
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
 
     env:
       NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: Setup Node
       uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # 4.0.2
@@ -28,7 +34,7 @@ jobs:
         registry-url: 'https://registry.npmjs.org'
         cache: 'npm'
 
-    - uses: dorny/paths-filter@v2
+    - uses: dorny/paths-filter@v3
       id: changes
       with:
         filters: |
@@ -50,10 +56,165 @@ jobs:
           npm publish --tag develop
         fi
 
-    - name: Hit endpoint and build from scratch pre-built image
-      run: |
-        curl --fail-with-body -X POST \
-        https://dev.polyapi.io/functions/server/prebuilt-base-image \
-        -H "Authorization: Bearer ${{ secrets.POLY_SUPER_ADMIN_USER_KEY }}" \
-        -H "Content-Type: application/json" \
-        -d '{}'
+  build-perch-image:
+    name: Build and push perch SFX image
+    needs: develop
+    if: ${{ !cancelled() && (needs.develop.result == 'success' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: build-perch-sfx-${{ inputs.perch_version || github.sha }}
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve perch-ts version
+        id: resolve-version
+        env:
+          REQUESTED_VERSION: ${{ inputs.perch_version }}
+        run: |
+          set -euo pipefail
+          VERSION="${REQUESTED_VERSION:-$(node -p "require('./package.json').version")}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid perch-ts version: $VERSION" >&2
+            exit 1
+          fi
+          echo "perch_version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "IMAGE=ghcr.io/polyapi/polyapi-ts-${VERSION}-perch:latest" >> "$GITHUB_ENV"
+          echo "Using perch-ts version: $VERSION"
+
+      - name: Wait for perch-ts release on npm
+        env:
+          VERSION: ${{ steps.resolve-version.outputs.perch_version }}
+        run: |
+          set -euo pipefail
+          MAX_ATTEMPTS=30
+          SLEEP_SECONDS=20
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            if curl --silent --show-error --fail --head \
+              --connect-timeout 10 --max-time 30 \
+              "https://registry.npmjs.org/perch-ts/${VERSION}" >/dev/null; then
+              echo "perch-ts@$VERSION is available on npm"
+              exit 0
+            fi
+            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
+              echo "Timed out waiting for perch-ts@$VERSION to appear on npm" >&2
+              exit 1
+            fi
+            echo "Attempt $attempt/$MAX_ATTEMPTS: retrying in ${SLEEP_SECONDS}s..."
+            sleep "$SLEEP_SECONDS"
+          done
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Check if image already exists
+        id: check-image
+        run: |
+          set -euo pipefail
+          if docker manifest inspect "$IMAGE" > /dev/null 2> "$RUNNER_TEMP/manifest-error"; then
+            echo "Perch image already exists, skipping"
+            echo "image_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Image could not be inspected; attempting to build and push it."
+            cat "$RUNNER_TEMP/manifest-error" >&2
+            echo "image_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install kn func CLI
+        if: steps.check-image.outputs.image_exists != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/func \
+            https://github.com/knative/func/releases/download/knative-v1.23.0/func_linux_amd64
+          chmod +x /tmp/func
+          sudo mv /tmp/func /usr/local/bin/func
+          func version
+
+      - name: Create Node function scaffold
+        if: steps.check-image.outputs.image_exists != 'true'
+        run: |
+          set -euo pipefail
+          FUNC_DIR="$(mktemp -d "${RUNNER_TEMP}/perch-sfx-XXXXXXXX")/perch-sfx"
+          func create -l node -p "$FUNC_DIR"
+          echo "FUNC_DIR=$FUNC_DIR" >> "$GITHUB_ENV"
+
+      - name: Install runtime dependency
+        if: steps.check-image.outputs.image_exists != 'true'
+        env:
+          VERSION: ${{ steps.resolve-version.outputs.perch_version }}
+        run: |
+          set -euo pipefail
+          MAX_ATTEMPTS=10
+          SLEEP_SECONDS=15
+          cd "$FUNC_DIR"
+          for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
+            if npm install --prefer-online "perch-ts@${VERSION}"; then
+              break
+            fi
+            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
+              echo "Failed to install perch-ts@$VERSION after $MAX_ATTEMPTS attempts" >&2
+              exit 1
+            fi
+            echo "Attempt $attempt/$MAX_ATTEMPTS: retrying in ${SLEEP_SECONDS}s..."
+            sleep "$SLEEP_SECONDS"
+          done
+
+      - name: Normalize func.yaml build settings
+        if: steps.check-image.outputs.image_exists != 'true'
+        env:
+          VERSION: ${{ steps.resolve-version.outputs.perch_version }}
+        run: |
+          set -euo pipefail
+          CREATED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cat > "${FUNC_DIR}/func.yaml" <<EOF
+          specVersion: 0.36.0
+          name: polyapi-ts-${VERSION}-perch
+          runtime: node
+          created: ${CREATED}
+          build:
+            builderImages:
+              pack: ghcr.io/knative/builder-jammy-base:latest
+            builder: pack
+            buildEnvs:
+              - name: BP_NODE_VERSION
+                value: "20.*"
+          EOF
+
+      - name: Build image with kn func
+        if: steps.check-image.outputs.image_exists != 'true'
+        run: |
+          set -euo pipefail
+          func build --image "$IMAGE" --push=false -p "$FUNC_DIR" --verbose
+
+      - name: Fix node_modules ownership and push image
+        if: steps.check-image.outputs.image_exists != 'true'
+        run: |
+          set -euo pipefail
+          docker build -t "$IMAGE" - <<EOF
+          FROM ${IMAGE}
+          USER root
+          RUN if [ -d /layers/paketo-buildpacks_npm-install/launch-modules/node_modules ]; then chown -R 1001:1001 /layers/paketo-buildpacks_npm-install/launch-modules/node_modules; fi
+          USER 1001
+          EOF
+          docker push "$IMAGE"
+
+      - name: Verify pushed image
+        if: steps.check-image.outputs.image_exists != 'true'
+        run: |
+          set -euo pipefail
+          docker pull "$IMAGE"
+          echo "Published image: $IMAGE"
