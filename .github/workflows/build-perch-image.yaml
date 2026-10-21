@@ -2,7 +2,7 @@ name: Build Perch Image
 on:
   workflow_run:
     workflows:
-      - Docker Image & NPM publish CI/CD
+      - NPM publish CI/CD
     types:
       - completed
   workflow_dispatch:
